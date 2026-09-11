@@ -1,0 +1,58 @@
+{
+  "model": "out/distill-student-v4.fused.onnx",
+  "sha256": "136b83ee1cbf16b102b341398534604a7f8ddadff1f07b50bc76739fa04a3795",
+  "input": {
+    "name": "waveform",
+    "shape": [
+      "batch",
+      48000
+    ],
+    "note": "raw 16 kHz float32 in [-1,1]; mel frontend baked into the graph",
+    "sample_rate": 16000,
+    "window_samples": 48000,
+    "cadence_ms": 750
+  },
+  "output": {
+    "name": "cosines",
+    "dim": 18,
+    "note": "teacher-space anchor cosines; apply softmax(x/T) then pose blend. T is v4-calibrated: the teacher's 0.05 divided by the 1.33 global deviation gain (teacher sd / student sd around the train mean) measured on never-trained pools \u2014 human-all + corpus-heldout, 96,577 windows (distill-calibrate.py, 2026-08-29). Argmax is temperature-invariant, so agreement with the teacher is untouched.",
+    "softmax_temperature": 0.0375,
+    "poses": [
+      "calm",
+      "content",
+      "warm",
+      "happy",
+      "amused",
+      "excited",
+      "surprised",
+      "smug",
+      "confused",
+      "skeptical",
+      "annoyed",
+      "disgusted",
+      "afraid",
+      "angry",
+      "tense",
+      "sad",
+      "weary",
+      "bored"
+    ]
+  },
+  "provenance": {
+    "ckpt": "out/distill-student-v4.pt",
+    "epoch": 18,
+    "heldout_z_mse": 0.5645506978034973,
+    "heldout_agree": 0.6379415091967989,
+    "params": 2231986,
+    "generation": "v4",
+    "mel": {
+      "sr": 16000,
+      "n_fft": 400,
+      "hop": 160,
+      "n_mels": 64,
+      "f_min": 50.0,
+      "f_max": 7600.0,
+      "frames": 301
+    }
+  }
+}
