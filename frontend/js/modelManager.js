@@ -26,6 +26,53 @@ export class ModelManagerController {
     if (this.btnSubmitImport) {
       this.btnSubmitImport.addEventListener("click", () => this.handleImport());
     }
+
+    const importFileInput = document.getElementById("importModelFile");
+    if (importFileInput) {
+      importFileInput.addEventListener("change", (e) => {
+        if (e.target.files && e.target.files[0]) {
+          const file = e.target.files[0];
+          const nameInput = document.getElementById("importName");
+          const sizeInput = document.getElementById("importSize");
+          if (nameInput && (!nameInput.value || nameInput.value === "")) {
+            nameInput.value = file.name.replace(/\.[^/.]+$/, "").replace(/_/g, " ");
+          }
+          if (sizeInput) {
+            sizeInput.value = (file.size / (1024 * 1024)).toFixed(1);
+          }
+        }
+      });
+    }
+  }
+
+  async handleImport() {
+    const category = document.getElementById("importCategory").value;
+    const nameInput = document.getElementById("importName");
+    const name = nameInput ? nameInput.value : "";
+    const version = document.getElementById("importVersion").value || "1.0";
+    const format = document.getElementById("importFormat").value || "ONNX-INT8";
+    const size_mb = parseFloat(document.getElementById("importSize").value) || 150.0;
+    const langs = document.getElementById("importLangs").value.split(",").map((s) => s.trim());
+
+    if (!name) {
+      alert("Please provide a model name or select a model file.");
+      return;
+    }
+
+    try {
+      await api.importModel({
+        category,
+        name,
+        version,
+        format,
+        size_mb,
+        supported_languages: langs
+      });
+      this.importModal.classList.remove("open");
+      this.loadModels();
+    } catch (e) {
+      alert(e.message);
+    }
   }
 
   async loadModels() {
@@ -74,22 +121,30 @@ export class ModelManagerController {
   }
 
   createModelCard(category, m) {
-    const card = document.createElement("div");
-    card.className = `model-card ${m.is_loaded ? "loaded" : ""}`;
+    const isLoaded = m.is_loaded ?? m.loaded ?? false;
+    const isActive = m.is_active ?? false;
+    const supportedLangs = m.supported_languages || m.languages || ["hi", "en"];
+    const ramEst = m.ram_estimate_mb || (m.size_mb ? Math.round(m.size_mb * 1.4) : 100);
+    const statusText = m.status || (isLoaded ? "Loaded & Ready" : "Not Loaded");
+    const formatText = m.format || "ONNX-INT8";
+    const versionText = m.version || "1.0";
 
-    const statusBadge = m.is_loaded
+    const card = document.createElement("div");
+    card.className = `model-card ${isLoaded ? "loaded" : ""}`;
+
+    const statusBadge = isLoaded
       ? `<span class="model-badge badge-loaded">● LOADED</span>`
       : `<span class="model-badge badge-unloaded">○ NOT LOADED</span>`;
 
-    const activeIndicator = m.is_active
-      ? `<span style="color:var(--accent-cyan); font-size:0.72rem; font-weight:700;">★ ACTIVE</span>`
+    const activeIndicator = isActive
+      ? `<span style="background:rgba(0,230,118,0.2); color:#00e676; padding:2px 8px; border-radius:4px; font-size:0.72rem; font-weight:800; border:1px solid rgba(0,230,118,0.4); margin-left:8px;">★ ACTIVE DEFAULT</span>`
       : "";
 
     card.innerHTML = `
       <div class="model-card-header">
         <div>
-          <div class="model-title">${m.name} ${activeIndicator}</div>
-          <span style="font-size:0.75rem; color:var(--text-muted);">${m.id} (v${m.version})</span>
+          <div class="model-title">${m.name || m.id} ${activeIndicator}</div>
+          <span style="font-size:0.75rem; color:var(--text-muted);">${m.id} (v${versionText})</span>
         </div>
         ${statusBadge}
       </div>
@@ -97,19 +152,19 @@ export class ModelManagerController {
       <div class="model-meta-grid">
         <div class="meta-field">
           <span class="label">Format</span>
-          <span class="val">${m.format}</span>
+          <span class="val">${formatText}</span>
         </div>
         <div class="meta-field">
           <span class="label">Disk Size</span>
-          <span class="val">${m.size_mb} MB</span>
+          <span class="val">${m.size_mb || 100} MB</span>
         </div>
         <div class="meta-field">
           <span class="label">RAM Est.</span>
-          <span class="val">~${m.ram_estimate_mb} MB</span>
+          <span class="val">~${ramEst} MB</span>
         </div>
         <div class="meta-field">
           <span class="label">Languages</span>
-          <span class="val">${m.supported_languages.join(", ")}</span>
+          <span class="val">${Array.isArray(supportedLangs) ? supportedLangs.join(", ") : supportedLangs}</span>
         </div>
         <div class="meta-field">
           <span class="label">Load Time</span>
@@ -122,25 +177,40 @@ export class ModelManagerController {
       </div>
 
       <div style="font-size:0.75rem; color:var(--text-secondary); background:rgba(0,0,0,0.3); padding:6px 10px; border-radius:4px;">
-        Status: <strong style="color:#fff;">${m.status}</strong>
+        Status: <strong style="color:#fff;">${statusText}</strong>
       </div>
 
-      <div class="model-card-actions">
+      <div class="model-card-actions" style="display:flex; flex-wrap:wrap; gap:6px; margin-top:10px;">
         ${
-          m.is_loaded
-            ? `<button class="btn-model-action unload" data-action="unload">UNLOAD</button>`
-            : `<button class="btn-model-action load" data-action="load">LOAD</button>`
+          isActive
+            ? `<button class="btn-model-action" disabled style="background:#00e676; color:#050b14; font-weight:800; border:none; cursor:default; padding:6px 12px; border-radius:4px;">✓ ACTIVE DEFAULT</button>`
+            : `<button class="btn-model-action" data-action="activate" style="border-color:var(--accent-cyan); color:var(--accent-cyan); font-weight:700; padding:6px 12px; border-radius:4px; cursor:pointer;">★ SET AS DEFAULT</button>`
         }
-        <button class="btn-model-action" data-action="test">TEST</button>
-        <button class="btn-model-action" data-action="delete" style="color:var(--color-red); border-color:#3b1e25;">DELETE</button>
+        ${
+          isLoaded
+            ? `<button class="btn-model-action unload" data-action="unload" style="cursor:pointer;">UNLOAD</button>`
+            : `<button class="btn-model-action load" data-action="load" style="cursor:pointer;">LOAD</button>`
+        }
+        <button class="btn-model-action" data-action="test" style="cursor:pointer;">TEST</button>
+        <button class="btn-model-action" data-action="delete" style="color:var(--color-red); border-color:#3b1e25; cursor:pointer;">DELETE</button>
       </div>
     `;
 
     // Action button events
+    card.querySelector('[data-action="activate"]')?.addEventListener("click", async () => {
+      try {
+        await api.activateModel(category, m.id);
+        await this.loadModels();
+        window.dispatchEvent(new CustomEvent("models-updated"));
+      } catch (e) {
+        alert(e.message);
+      }
+    });
+
     card.querySelector('[data-action="load"]')?.addEventListener("click", async () => {
       try {
-        await api.loadModel(category, m.id);
-        this.loadModels();
+        await api.activateModel(category, m.id);
+        await this.loadModels();
         window.dispatchEvent(new CustomEvent("models-updated"));
       } catch (e) {
         alert(e.message);
@@ -150,7 +220,7 @@ export class ModelManagerController {
     card.querySelector('[data-action="unload"]')?.addEventListener("click", async () => {
       try {
         await api.unloadModel(category, m.id);
-        this.loadModels();
+        await this.loadModels();
         window.dispatchEvent(new CustomEvent("models-updated"));
       } catch (e) {
         alert(e.message);

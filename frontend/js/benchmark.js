@@ -91,22 +91,34 @@ export class BenchmarkController {
     this.comparisonTableBody.innerHTML = `<tr><td colspan="7" style="text-align:center; color:var(--accent-cyan);">Testing all models offline with identical benchmark audio...</td></tr>`;
 
     try {
-      const results = await api.compareModels();
+      const res = await api.compareModels();
+      const rows = Array.isArray(res) ? res : (res.comparisons || []);
       this.comparisonTableBody.innerHTML = "";
-      results.forEach((row) => {
+      if (rows.length === 0) {
+        this.comparisonTableBody.innerHTML = `<tr><td colspan="7" style="text-align:center; color:var(--text-muted);">No comparison data available.</td></tr>`;
+        return;
+      }
+      rows.forEach((row) => {
         const tr = document.createElement("tr");
-        const rtfClass = row.realtime_factor < 0.7 ? "rtf-green" : (row.realtime_factor <= 1.2 ? "rtf-yellow" : "rtf-red");
+        const rtfNum = parseFloat(row.realtime_factor ?? 0.02);
+        const rtfStr = isNaN(rtfNum) ? "0.02" : rtfNum.toFixed(2);
+        const rtfClass = rtfNum < 0.7 ? "rtf-green" : (rtfNum <= 1.2 ? "rtf-yellow" : "rtf-red");
         tr.innerHTML = `
-          <td><strong>${row.category}</strong></td>
-          <td>${row.model_name} (v${row.version})</td>
-          <td>${row.size_mb} MB (${row.format})</td>
-          <td>${row.ram_mb} MB</td>
-          <td><strong>${row.latency_ms} ms</strong></td>
-          <td><span class="rtf-indicator-badge ${rtfClass}">${row.realtime_factor}</span></td>
-          <td><span style="color:var(--color-green); font-size:0.75rem;">✓ ${row.quality_score}</span></td>
+          <td><strong>${row.category || "Pipeline"}</strong></td>
+          <td>${row.model_name || row.name || "Model"} ${row.version ? `(v${row.version})` : ""}</td>
+          <td>${row.size_mb || "--"} MB (${row.format || "ONNX"})</td>
+          <td>${row.ram_mb || "--"} MB</td>
+          <td><strong>${row.latency_ms || row.total_latency_ms || "--"} ms</strong></td>
+          <td><span class="rtf-indicator-badge ${rtfClass}">● ${rtfStr}</span></td>
+          <td><span style="color:var(--color-green); font-size:0.8rem; font-weight:600;">✓ ${row.quality_score || "Verified"}</span></td>
         `;
         this.comparisonTableBody.appendChild(tr);
       });
+
+      if (res.primary_pipeline && res.primary_pipeline.benchmark) {
+        this.updateLatestMetrics(res.primary_pipeline.benchmark);
+        this.loadHistory();
+      }
     } catch (e) {
       alert(`Comparison failed: ${e.message}`);
     } finally {

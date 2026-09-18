@@ -290,6 +290,15 @@ def generate_tts(req: TTSRequest):
 def get_models():
     return modelManager.list_models()
 
+@app.post("/api/models/{category}/{model_id}/activate")
+def activate_model(category: str, model_id: str):
+    try:
+        res = modelManager.load_model(category, model_id)
+        modelManager.active_models[category] = model_id
+        return res
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
 @app.post("/api/models/{category}/{model_id}/load")
 def load_model(category: str, model_id: str):
     try:

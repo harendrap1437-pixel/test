@@ -1,38 +1,125 @@
 /**
  * Local AI API Service Client.
- * Communicates ONLY with 127.0.0.1. Zero cloud or third-party connections.
+ * Communicates directly via in-app Native AndroidBridge or Local HTTP (127.0.0.1).
+ * 100% Offline with zero cloud or third-party connections.
  */
-const API_BASE = window.location.origin;
+
+const getApiBase = () => {
+  if (typeof window !== "undefined" && window.location && window.location.origin && window.location.origin.startsWith("http")) {
+    return window.location.origin;
+  }
+  return "http://127.0.0.1:8765";
+};
+
+const API_BASE = getApiBase();
+
+const blobToBase64 = (blob) =>
+  new Promise((resolve, reject) => {
+    if (!blob) return resolve(null);
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
 
 export const api = {
   async getStatus() {
+    if (window.AndroidBridge && typeof window.AndroidBridge.getStatus === "function") {
+      try {
+        const raw = window.AndroidBridge.getStatus();
+        return JSON.parse(raw);
+      } catch (e) {
+        console.warn("AndroidBridge getStatus error, falling back to HTTP:", e);
+      }
+    }
     const res = await fetch(`${API_BASE}/api/status`);
     return await res.json();
   },
 
   async getLanguages() {
+    if (window.AndroidBridge && typeof window.AndroidBridge.getLanguages === "function") {
+      try {
+        const raw = window.AndroidBridge.getLanguages();
+        return JSON.parse(raw);
+      } catch (e) {
+        console.warn("AndroidBridge getLanguages error, falling back to HTTP:", e);
+      }
+    }
     const res = await fetch(`${API_BASE}/api/languages`);
     return await res.json();
   },
 
   async getSamples() {
+    if (window.AndroidBridge && typeof window.AndroidBridge.getSamples === "function") {
+      try {
+        const raw = window.AndroidBridge.getSamples();
+        return JSON.parse(raw);
+      } catch (e) {
+        console.warn("AndroidBridge getSamples error, falling back to HTTP:", e);
+      }
+    }
     const res = await fetch(`${API_BASE}/api/samples`);
     return await res.json();
   },
 
   async translateAudioPipeline(formData) {
-    const res = await fetch(`${API_BASE}/api/pipeline/translate-audio`, {
-      method: "POST",
-      body: formData
-    });
-    if (!res.ok) {
-      const err = await res.json();
-      throw new Error(err.detail || "Pipeline translation failed");
+    // Check if AndroidBridge direct native pipeline is available
+    if (window.AndroidBridge && typeof window.AndroidBridge.runPipelineJson === "function") {
+      try {
+        const payload = {};
+        for (const [key, value] of formData.entries()) {
+          if (value instanceof Blob) {
+            payload.audio_base64 = await blobToBase64(value);
+          } else {
+            payload[key] = value;
+          }
+        }
+        const raw = window.AndroidBridge.runPipelineJson(JSON.stringify(payload));
+        const res = JSON.parse(raw);
+        if (res.error) throw new Error(res.error);
+        return res;
+      } catch (e) {
+        console.warn("AndroidBridge runPipelineJson error, attempting HTTP fallback:", e);
+      }
     }
-    return await res.json();
+
+    try {
+      const res = await fetch(`${API_BASE}/api/pipeline/translate-audio`, {
+        method: "POST",
+        body: formData
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ detail: "Pipeline translation failed" }));
+        throw new Error(err.detail || `Server returned ${res.status}`);
+      }
+      return await res.json();
+    } catch (fetchErr) {
+      // If HTTP fails on Android, fallback to Bridge
+      if (window.AndroidBridge && typeof window.AndroidBridge.runPipelineJson === "function") {
+        const payload = {};
+        for (const [key, value] of formData.entries()) {
+          if (value instanceof Blob) {
+            payload.audio_base64 = await blobToBase64(value);
+          } else {
+            payload[key] = value;
+          }
+        }
+        const raw = window.AndroidBridge.runPipelineJson(JSON.stringify(payload));
+        return JSON.parse(raw);
+      }
+      throw fetchErr;
+    }
   },
 
   async translateText(text, srcLang, tgtLang) {
+    if (window.AndroidBridge && typeof window.AndroidBridge.translateText === "function") {
+      try {
+        const raw = window.AndroidBridge.translateText(text, srcLang, tgtLang);
+        return JSON.parse(raw);
+      } catch (e) {
+        console.warn("AndroidBridge translateText fallback:", e);
+      }
+    }
     const res = await fetch(`${API_BASE}/api/pipeline/translate-text`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -69,6 +156,15 @@ export const api = {
 
   async getModels() {
     const res = await fetch(`${API_BASE}/api/models`);
+    return await res.json();
+  },
+
+  async activateModel(category, modelId) {
+    const res = await fetch(`${API_BASE}/api/models/${category}/${modelId}/activate`, { method: "POST" });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.detail || "Model activation failed");
+    }
     return await res.json();
   },
 
@@ -122,6 +218,12 @@ export const api = {
   },
 
   async getBenchmarkHistory() {
+    if (window.AndroidBridge && typeof window.AndroidBridge.getBenchmarkHistory === "function") {
+      try {
+        const raw = window.AndroidBridge.getBenchmarkHistory();
+        return JSON.parse(raw);
+      } catch (e) {}
+    }
     const res = await fetch(`${API_BASE}/api/benchmark/history`);
     return await res.json();
   },
@@ -139,11 +241,23 @@ export const api = {
   },
 
   async getQualityTestDataset() {
+    if (window.AndroidBridge && typeof window.AndroidBridge.getQualityDataset === "function") {
+      try {
+        const raw = window.AndroidBridge.getQualityDataset();
+        return JSON.parse(raw);
+      } catch (e) {}
+    }
     const res = await fetch(`${API_BASE}/api/quality-test`);
     return await res.json();
   },
 
   async runQualityTest() {
+    if (window.AndroidBridge && typeof window.AndroidBridge.runQualityTest === "function") {
+      try {
+        const raw = window.AndroidBridge.runQualityTest();
+        return JSON.parse(raw);
+      } catch (e) {}
+    }
     const res = await fetch(`${API_BASE}/api/quality-test/run`, { method: "POST" });
     if (!res.ok) {
       const err = await res.json();
@@ -153,6 +267,12 @@ export const api = {
   },
 
   async evaluateQualityItem(itemId, evaluation) {
+    if (window.AndroidBridge && typeof window.AndroidBridge.evaluateQualityItem === "function") {
+      try {
+        const raw = window.AndroidBridge.evaluateQualityItem(itemId, evaluation);
+        return JSON.parse(raw);
+      } catch (e) {}
+    }
     const res = await fetch(`${API_BASE}/api/quality-test/evaluate`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -166,6 +286,22 @@ export const api = {
   },
 
   async analyzeEmotion(formData) {
+    if (window.AndroidBridge && typeof window.AndroidBridge.analyzeEmotion === "function") {
+      try {
+        const payload = {};
+        for (const [key, value] of formData.entries()) {
+          if (value instanceof Blob) {
+            payload.audio_base64 = await blobToBase64(value);
+          } else {
+            payload[key] = value;
+          }
+        }
+        const raw = window.AndroidBridge.analyzeEmotion(JSON.stringify(payload));
+        return JSON.parse(raw);
+      } catch (e) {
+        console.warn("AndroidBridge analyzeEmotion fallback:", e);
+      }
+    }
     const res = await fetch(`${API_BASE}/api/emotion/analyze-audio`, {
       method: "POST",
       body: formData
@@ -178,6 +314,12 @@ export const api = {
   },
 
   async getEmotionSamples() {
+    if (window.AndroidBridge && typeof window.AndroidBridge.getEmotionSamples === "function") {
+      try {
+        const raw = window.AndroidBridge.getEmotionSamples();
+        return JSON.parse(raw);
+      } catch (e) {}
+    }
     const res = await fetch(`${API_BASE}/api/emotion/samples`);
     return await res.json();
   },
@@ -192,3 +334,4 @@ export const api = {
     return await res.json();
   }
 };
+

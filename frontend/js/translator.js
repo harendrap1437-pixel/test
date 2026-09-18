@@ -25,6 +25,7 @@ export class TranslatorController {
     this.tgtLangSelect = document.getElementById("tgtLangSelect");
     this.swapLangBtn = document.getElementById("swapLangBtn");
     this.pttBtn = document.getElementById("pttMainBtn");
+    this.voiceDialogBtn = document.getElementById("voiceDialogBtn");
     this.translateBtn = document.getElementById("translateActionBtn");
     this.replayBtn = document.getElementById("replayAudioBtn");
     this.stopAudioBtn = document.getElementById("stopAudioBtn");
@@ -76,6 +77,66 @@ export class TranslatorController {
     this.replayBtn.addEventListener("click", () => this.playAudio());
     this.stopAudioBtn.addEventListener("click", () => this.stopAudio());
 
+    // Quick Test Offline Samples (1-Click Run)
+    document.querySelectorAll(".quick-sample-pill").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const sample = btn.getAttribute("data-sample");
+        const lang = btn.getAttribute("data-lang") || "hi";
+        this.selectedSample = sample;
+        this.recordedAudioBlob = null;
+        if (this.srcLangSelect) this.srcLangSelect.value = lang;
+        if (this.tgtLangSelect) this.tgtLangSelect.value = (lang === "en" ? "hi" : "en");
+        if (this.audioDurationTag) this.audioDurationTag.textContent = `Preset: ${sample}`;
+        if (this.lcdSourceText) this.lcdSourceText.textContent = `Loading ${sample}...`;
+        this.resetPipelineSteps();
+        this.markStep(1, "done");
+        await this.executeTranslationPipeline();
+      });
+    });
+
+    const btnInstallVoice = document.getElementById("btnInstallTtsVoice");
+    if (btnInstallVoice) {
+      btnInstallVoice.addEventListener("click", () => {
+        if (window.AndroidBridge && typeof window.AndroidBridge.openTtsSettings === "function") {
+          window.AndroidBridge.openTtsSettings();
+        }
+      });
+    }
+
+    window.onNativeVoiceMissing = (langCode, langName) => {
+      const bar = document.getElementById("ttsVoiceBar");
+      const text = document.getElementById("ttsVoiceBarText");
+      if (bar && text) {
+        text.textContent = `⚠️ ${langName} offline voice data missing`;
+        bar.style.display = "flex";
+      }
+    };
+
+    window.onNativeSpeechError = (errMsg) => {
+      this.isRecording = false;
+      this.pttBtn.classList.remove("recording");
+      this.pttBtn.innerHTML = `<span>🎙 PUSH TO TALK (LOCAL 16kHz MIC)</span>`;
+      this.handheld.stopWaveform();
+      this.showNotice(`ℹ️ ${errMsg}`);
+    };
+
+    window.onNativeSpeechEnd = () => {
+      this.isRecording = false;
+      this.pttBtn.classList.remove("recording");
+      this.pttBtn.innerHTML = `<span>🎙 PUSH TO TALK (LOCAL 16kHz MIC)</span>`;
+      this.handheld.stopWaveform();
+    };
+
+    window.onNativeTtsStart = () => {
+      this.handheld.startWaveform(false);
+      this.replayBtn.disabled = false;
+      this.stopAudioBtn.disabled = false;
+    };
+
+    window.onNativeTtsDone = () => {
+      this.handheld.stopWaveform();
+    };
+
     // Standalone Emotion SER analyzer events
     if (this.btnAnalyzeEmotion) {
       this.btnAnalyzeEmotion.addEventListener("click", () => this.runStandaloneEmotionAnalysis());
@@ -101,27 +162,58 @@ export class TranslatorController {
     this.modeMicBtn.addEventListener("click", () => this.setInputMode("mic"));
     this.modeFileBtn.addEventListener("click", () => this.setInputMode("file"));
 
-    this.audioFileInput.addEventListener("change", async (e) => {
-      if (e.target.files && e.target.files[0]) {
-        const file = e.target.files[0];
-        this.selectedSample = null;
-        this.audioDurationTag.textContent = `Processing ${file.name}...`;
-        this.translateBtn.disabled = true;
-        this.resetPipelineSteps();
-        this.markStep(1, "active");
+    const fileDropZone = document.getElementById("fileDropZone") || document.querySelector(".file-import-dropzone");
 
-        try {
-          this.recordedAudioBlob = await this.convertTo16kHzMonoWav(file);
-          this.audioDurationTag.textContent = `${file.name} (16kHz WAV Ready)`;
-        } catch (err) {
-          console.warn("Client audio conversion fallback to raw file:", err);
-          this.recordedAudioBlob = file;
-          this.audioDurationTag.textContent = `${file.name}`;
-        }
-        this.translateBtn.disabled = false;
-        this.markStep(1, "done");
+    const processSelectedFile = async (file) => {
+      if (!file) return;
+      this.selectedSample = null;
+      this.audioDurationTag.textContent = `Processing ${file.name}...`;
+      this.translateBtn.disabled = true;
+      this.resetPipelineSteps();
+      this.markStep(1, "active");
+
+      try {
+        this.recordedAudioBlob = await this.convertTo16kHzMonoWav(file);
+        this.audioDurationTag.textContent = `${file.name} (Audio Ready)`;
+      } catch (err) {
+        console.warn("Client audio conversion fallback to raw file:", err);
+        this.recordedAudioBlob = file;
+        this.audioDurationTag.textContent = `${file.name}`;
       }
-    });
+      this.translateBtn.disabled = false;
+      this.markStep(1, "done");
+    };
+
+    if (this.audioFileInput) {
+      this.audioFileInput.addEventListener("change", async (e) => {
+        if (e.target.files && e.target.files[0]) {
+          await processSelectedFile(e.target.files[0]);
+        }
+      });
+    }
+
+    if (fileDropZone && this.audioFileInput) {
+      fileDropZone.addEventListener("click", (e) => {
+        if (e.target !== this.audioFileInput) {
+          this.audioFileInput.click();
+        }
+      });
+      fileDropZone.addEventListener("dragover", (e) => {
+        e.preventDefault();
+        fileDropZone.classList.add("drag-active");
+      });
+      fileDropZone.addEventListener("dragleave", (e) => {
+        e.preventDefault();
+        fileDropZone.classList.remove("drag-active");
+      });
+      fileDropZone.addEventListener("drop", async (e) => {
+        e.preventDefault();
+        fileDropZone.classList.remove("drag-active");
+        if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+          await processSelectedFile(e.dataTransfer.files[0]);
+        }
+      });
+    }
 
     this.audioElement.addEventListener("ended", () => {
       this.handheld.stopWaveform();
@@ -129,14 +221,62 @@ export class TranslatorController {
     });
 
     window.addEventListener("models-updated", () => this.updateActiveModelLabels());
+
+    // Listen for shared audio files from Android system intents (WhatsApp, Voice Recorder, Files, etc.)
+    window.onSharedAudioReceived = async (fileName, dataUrl) => {
+      console.log("Shared audio received:", fileName);
+      this.setInputMode("file");
+      this.selectedSample = null;
+      this.liveSpeechTranscript = "";
+      if (this.lcdSourceText) {
+        this.lcdSourceText.innerHTML = `<span class="pipeline-pulse-text">📥 Shared: ${fileName}</span>`;
+      }
+      if (this.lcdTargetText) {
+        this.lcdTargetText.innerHTML = `<span style="color:var(--text-muted); font-style:italic;">Processing audio offline...</span>`;
+      }
+      this.audioDurationTag.textContent = `${fileName} (Shared Audio)`;
+      this.translateBtn.disabled = true;
+      this.resetPipelineSteps();
+      this.markStep(1, "active");
+
+      try {
+        const response = await fetch(dataUrl);
+        const rawBlob = await response.blob();
+        try {
+          this.recordedAudioBlob = await this.convertTo16kHzMonoWav(rawBlob);
+        } catch (convErr) {
+          console.warn("WAV conversion fallback for shared audio:", convErr);
+          this.recordedAudioBlob = rawBlob;
+        }
+        this.translateBtn.disabled = false;
+        this.markStep(1, "done");
+
+        this.showNotice("Audio file ready! Tap '⚡ RUN TRANSLATE' to convert.");
+      } catch (err) {
+        console.error("Failed to load shared audio:", err);
+        this.showError(`Could not load shared audio: ${err.message}`);
+        this.translateBtn.disabled = false;
+      }
+    };
+
+    if (window._pendingSharedAudio) {
+      const p = window._pendingSharedAudio;
+      window._pendingSharedAudio = null;
+      setTimeout(() => {
+        if (typeof window.onSharedAudioReceived === "function") {
+          window.onSharedAudioReceived(p.name, p.dataUrl);
+        }
+      }, 400);
+    }
   }
 
   async updateActiveModelLabels() {
     try {
       const modelsData = await api.getModels();
-      const asr = (modelsData.asr || []).find((m) => m.is_active && m.is_loaded) || (modelsData.asr || []).find((m) => m.is_loaded) || (modelsData.asr || [])[0];
-      const trans = (modelsData.translation || []).find((m) => m.is_active && m.is_loaded) || (modelsData.translation || []).find((m) => m.is_loaded) || (modelsData.translation || [])[0];
-      const tts = (modelsData.tts || []).find((m) => m.is_active && m.is_loaded) || (modelsData.tts || []).find((m) => m.is_loaded) || (modelsData.tts || [])[0];
+      const asr = (modelsData.asr || []).find((m) => m.is_active) || (modelsData.asr || []).find((m) => m.is_loaded) || (modelsData.asr || [])[0];
+      const trans = (modelsData.translation || []).find((m) => m.is_active) || (modelsData.translation || []).find((m) => m.is_loaded) || (modelsData.translation || [])[0];
+      const tts = (modelsData.tts || []).find((m) => m.is_active) || (modelsData.tts || []).find((m) => m.is_loaded) || (modelsData.tts || [])[0];
+      const emo = (modelsData.emotion || []).find((m) => m.is_active) || (modelsData.emotion || []).find((m) => m.is_loaded) || (modelsData.emotion || [])[0];
 
       if (asr) {
         const asrName = `${asr.name}`;
@@ -165,6 +305,14 @@ export class TranslatorController {
         if (mTts) mTts.textContent = ttsName;
         if (sTts) sTts.textContent = ttsName;
       }
+
+      if (emo) {
+        const emoName = `${emo.name}`;
+        const mEmo = document.getElementById("matrixEmoName");
+        const sEmo = document.getElementById("stepEmoName");
+        if (mEmo) mEmo.textContent = emoName;
+        if (sEmo) sEmo.textContent = emoName;
+      }
     } catch (e) {
       console.warn("Could not fetch active models for translator:", e);
     }
@@ -191,8 +339,10 @@ export class TranslatorController {
       this.srcLangSelect.innerHTML = "";
       this.tgtLangSelect.innerHTML = "";
       langs.forEach((l) => {
-        const opt1 = new Option(`${l.name} (${l.native})`, l.code);
-        const opt2 = new Option(`${l.name} (${l.native})`, l.code);
+        const nativeLabel = l.native && l.native !== l.name ? ` (${l.native})` : "";
+        const label = `${l.name}${nativeLabel}`;
+        const opt1 = new Option(label, l.code);
+        const opt2 = new Option(label, l.code);
         this.srcLangSelect.add(opt1);
         this.tgtLangSelect.add(opt2);
       });
@@ -208,17 +358,22 @@ export class TranslatorController {
       const samples = await api.getSamples();
       this.samplePillsContainer.innerHTML = "";
       samples.forEach((s) => {
+        const dur = s.duration_sec ?? s.duration_seconds ?? 3.0;
         const btn = document.createElement("button");
         btn.className = "sample-audio-btn";
-        btn.textContent = `▶ ${s.filename} (${s.duration_sec}s)`;
-        btn.onclick = () => {
+        btn.textContent = `▶ ${s.filename} (${dur}s)`;
+        btn.onclick = async () => {
           this.selectedSample = s.filename;
           this.recordedAudioBlob = null;
-          this.audioDurationTag.textContent = `${s.filename} [${s.duration_sec}s]`;
+          const sLang = s.language?.toLowerCase()?.startsWith("hi") || s.filename?.includes("_hi_") ? "hi" : "en";
+          if (this.srcLangSelect) this.srcLangSelect.value = sLang;
+          if (this.tgtLangSelect) this.tgtLangSelect.value = (sLang === "en" ? "hi" : "en");
+          this.audioDurationTag.textContent = `${s.filename} [${dur}s]`;
           this.translateBtn.disabled = false;
           this.resetPipelineSteps();
           this.markStep(1, "done");
           this.lcdSourceText.textContent = `Selected: ${s.filename}`;
+          await this.executeTranslationPipeline();
         };
         this.samplePillsContainer.appendChild(btn);
       });
@@ -231,6 +386,9 @@ export class TranslatorController {
     try {
       const arrayBuffer = await rawBlob.arrayBuffer();
       const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      if (audioCtx.state === 'suspended') {
+        try { await audioCtx.resume(); } catch (e) {}
+      }
       const decodedBuffer = await audioCtx.decodeAudioData(arrayBuffer);
 
       // Resample to 16,000 Hz mono (Whisper & Conformer standard)
@@ -282,10 +440,90 @@ export class TranslatorController {
   }
 
   async toggleLiveRecording() {
+    // 1. Direct Native Mic Recording (Android) -> Whisper ONNX
+    if (window.AndroidBridge && typeof window.AndroidBridge.startMicRecording === "function") {
+      if (this.isRecording) {
+        await this.stopNativeMicRecording();
+      } else {
+        this.startNativeMicRecording();
+      }
+      return;
+    }
+
+    // 2. Web MediaRecorder (Desktop / Browser)
     if (this.isRecording) {
       this.stopRecording();
     } else {
       await this.startRecording();
+    }
+  }
+
+  startNativeMicRecording() {
+    const sLang = this.srcLangSelect ? this.srcLangSelect.value : "hi";
+    const ok = window.AndroidBridge.startMicRecording();
+    if (!ok) {
+      this.showNotice("⚠️ Microphone recording could not be started. Check app permissions.");
+      return;
+    }
+    this.isRecording = true;
+    this.pttBtn.classList.add("recording");
+    this.pttBtn.innerHTML = `<span>⏹ STOP (RECORDING MIC...)</span>`;
+    this.handheld.startWaveform(true);
+    this.resetPipelineSteps();
+    this.markStep(1, "active");
+    this.hideError();
+    if (this.lcdSourceText) {
+      this.lcdSourceText.innerHTML = `<span class="pipeline-pulse-text">🎙 Recording mic for Whisper AI... Speak now!</span>`;
+    }
+    if (this.lcdTargetText) {
+      this.lcdTargetText.innerHTML = `<span style="color:var(--text-muted); font-style:italic;">Listening offline...</span>`;
+    }
+  }
+
+  async stopNativeMicRecording() {
+    this.isRecording = false;
+    this.pttBtn.classList.remove("recording");
+    this.pttBtn.innerHTML = `<span>🎙 PUSH TO TALK (MIC)</span>`;
+    this.handheld.stopWaveform();
+
+    const sLang = this.srcLangSelect ? this.srcLangSelect.value : "hi";
+    if (this.lcdSourceText) {
+      this.lcdSourceText.innerHTML = `<span class="pipeline-pulse-text">⚡ Running Whisper ONNX inference...</span>`;
+    }
+
+    try {
+      const resJsonStr = window.AndroidBridge.stopMicRecording(sLang);
+      const res = JSON.parse(resJsonStr);
+      if (!res.success) {
+        this.showNotice(`ℹ️ ${res.error || "No audio captured"}`);
+        return;
+      }
+
+      if (res.audio_base64) {
+        const audioFetch = await fetch(res.audio_base64);
+        this.recordedAudioBlob = await audioFetch.blob();
+      }
+      this.selectedSample = null;
+      this.liveSpeechTranscript = res.transcript || "";
+      if (this.lcdSourceText) {
+        this.lcdSourceText.textContent = res.transcript || "(No speech detected)";
+      }
+      const durSec = res.audio_bytes_len ? (res.audio_bytes_len / 32000).toFixed(1) : "1.0";
+      this.audioDurationTag.textContent = `Mic Recorded (${durSec}s)`;
+      this.translateBtn.disabled = false;
+      this.markStep(1, "done");
+      this.markStep(2, "done");
+      this.markStep(3, "done");
+
+      if (res.transcript && res.transcript.trim()) {
+        const ms = res.latency_ms ? res.latency_ms.toFixed(0) : "120";
+        this.showNotice(`Whisper AI recognized (${ms}ms): "${res.transcript}". Tap '⚡ RUN TRANSLATE'`);
+      } else {
+        this.showNotice("ℹ️ Audio recorded. Tap '⚡ RUN TRANSLATE' to convert or speak again.");
+      }
+    } catch (e) {
+      console.error("stopNativeMicRecording error:", e);
+      this.showError(`Whisper recording error: ${e.message}`);
     }
   }
 
@@ -294,6 +532,7 @@ export class TranslatorController {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       this.mediaRecorder = new MediaRecorder(stream);
       this.audioChunks = [];
+      this.liveSpeechTranscript = "";
 
       this.mediaRecorder.ondataavailable = (e) => {
         if (e.data.size > 0) this.audioChunks.push(e.data);
@@ -302,12 +541,45 @@ export class TranslatorController {
       this.mediaRecorder.onstop = async () => {
         const rawBlob = new Blob(this.audioChunks, { type: this.mediaRecorder.mimeType || "audio/webm" });
         this.audioDurationTag.textContent = "Processing audio...";
-        this.recordedAudioBlob = await this.convertTo16kHzMonoWav(rawBlob);
+        try {
+          this.recordedAudioBlob = await this.convertTo16kHzMonoWav(rawBlob);
+        } catch (e) {
+          console.warn("WAV conversion fallback to raw recording:", e);
+          this.recordedAudioBlob = rawBlob;
+        }
         this.selectedSample = null;
         this.audioDurationTag.textContent = "Mic Audio Ready (16kHz WAV)";
         this.translateBtn.disabled = false;
         this.markStep(1, "done");
       };
+
+      // Real-time Speech Recognition (Web Speech API)
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (SpeechRecognition) {
+        try {
+          this.speechRecognizer = new SpeechRecognition();
+          this.speechRecognizer.continuous = true;
+          this.speechRecognizer.interimResults = true;
+          const sLang = this.srcLangSelect ? this.srcLangSelect.value : "hi";
+          this.speechRecognizer.lang = sLang === "hi" ? "hi-IN" : (sLang === "ta" ? "ta-IN" : (sLang === "bn" ? "bn-IN" : (sLang === "te" ? "te-IN" : "en-US")));
+          
+          this.speechRecognizer.onresult = (event) => {
+            let currentStr = "";
+            for (let i = event.resultIndex; i < event.results.length; i++) {
+              currentStr += event.results[i][0].transcript;
+            }
+            if (currentStr.trim()) {
+              this.liveSpeechTranscript = currentStr.trim();
+              if (this.lcdSourceText) {
+                this.lcdSourceText.textContent = this.liveSpeechTranscript;
+              }
+            }
+          };
+          this.speechRecognizer.start();
+        } catch (srErr) {
+          console.warn("Live SpeechRecognition not supported or disabled:", srErr);
+        }
+      }
 
       this.mediaRecorder.start();
       this.isRecording = true;
@@ -318,7 +590,7 @@ export class TranslatorController {
       this.markStep(1, "active");
       this.hideError();
     } catch (err) {
-      this.showError(`Microphone access error: ${err.message}. You can also use Local Audio File / Presets.`);
+      this.showError(`Microphone access error: ${err.message}. You can also type text in Source Transcript or select Presets.`);
     }
   }
 
@@ -327,6 +599,9 @@ export class TranslatorController {
       this.mediaRecorder.stop();
       this.mediaRecorder.stream.getTracks().forEach((t) => t.stop());
       this.isRecording = false;
+      if (this.speechRecognizer) {
+        try { this.speechRecognizer.stop(); } catch (e) {}
+      }
       this.pttBtn.classList.remove("recording");
       this.pttBtn.innerHTML = `<span>🎙 PUSH TO TALK (MIC)</span>`;
       this.handheld.stopWaveform();
@@ -344,6 +619,27 @@ export class TranslatorController {
     formData.append("src_lang", this.srcLangSelect.value);
     formData.append("tgt_lang", this.tgtLangSelect.value);
 
+    // Check if input is an audio file (uploaded or shared)
+    const isAudioFileInput = this.inputMode === "file" || (this.recordedAudioBlob && !this.selectedSample && !this.isRecording);
+
+    // Check user edited text or live transcribed speech
+    const userLcdText = this.lcdSourceText ? this.lcdSourceText.textContent.trim() : "";
+    const isPlaceholder = !userLcdText || 
+      userLcdText.includes("Press Push-to-Talk") || 
+      userLcdText.includes("Selected:") || 
+      userLcdText.includes("Waiting for") ||
+      userLcdText.includes("Listening...") ||
+      userLcdText.includes("Processing") ||
+      userLcdText.includes("Shared:") ||
+      userLcdText.includes("File:") ||
+      userLcdText.includes("Step ");
+    const activeText = (!isAudioFileInput && !isPlaceholder) ? userLcdText : (this.inputMode === "mic" ? (this.liveSpeechTranscript || "") : "");
+
+    if (activeText) {
+      formData.append("recorded_transcript", activeText);
+      formData.append("text", activeText);
+    }
+
     // Style/Prosody parameters for Expressive TTS
     formData.append("speed", this.prosodySpeed ? this.prosodySpeed.value : 1.0);
     formData.append("pitch", this.prosodyPitch ? this.prosodyPitch.value : 1.0);
@@ -355,8 +651,9 @@ export class TranslatorController {
       formData.append("sample_filename", this.selectedSample);
     } else if (this.recordedAudioBlob) {
       formData.append("audio_file", this.recordedAudioBlob, "audio_input.wav");
-    } else {
-      // Default to sample
+      formData.append("audio", this.recordedAudioBlob, "audio_input.wav");
+    } else if (!activeText) {
+      // Default to sample only if no spoken words or input text
       formData.append("sample_filename", "sample_hi_phr1_pharmacy.wav");
     }
 
@@ -385,13 +682,14 @@ export class TranslatorController {
 
       // Visual Stage 3: Transcript Produced
       this.markStep(3, "done");
-      this.lcdSourceText.textContent = res.source_transcript;
+      const srcText = res.source_transcript || res.source_text || "(No transcript)";
+      this.lcdSourceText.textContent = srcText;
       await sleep(150);
 
       // Visual Stage 4: Emotion SER Analysis (Real Acoustic Waveform Evaluation)
       this.markStep(4, "active");
-      const emoStr = (res.detected_emotion || "neutral").toUpperCase();
-      const emoConfPct = (res.emotion_confidence ? res.emotion_confidence * 100 : 85).toFixed(1);
+      const emoStr = (res.detected_emotion || res.emotion || "neutral").toUpperCase();
+      const emoConfPct = (res.emotion_confidence ? res.emotion_confidence * 100 : 85.0).toFixed(1);
       if (this.stepEmotionResult) {
         this.stepEmotionResult.textContent = `${emoStr} (${emoConfPct}%)`;
       }
@@ -410,7 +708,8 @@ export class TranslatorController {
       // Visual Stage 6: Translation Produced
       this.markStep(5, "done");
       this.markStep(6, "done");
-      this.lcdTargetText.textContent = res.translated_text;
+      const tgtText = res.translated_text || res.target_text || "(No translation)";
+      this.lcdTargetText.textContent = tgtText;
       await sleep(180);
 
       // Visual Stage 7: Emotion-Aware TTS Running
@@ -421,10 +720,12 @@ export class TranslatorController {
       this.markStep(7, "done");
       this.markStep(8, "done");
 
-      this.currentAudioOutputUrl = res.audio_base64;
-      this.audioElement.src = this.currentAudioOutputUrl;
-      this.replayBtn.disabled = false;
-      this.stopAudioBtn.disabled = false;
+      this.currentAudioOutputUrl = res.audio_base64 || res.audio_output || res.audio_url;
+      if (this.currentAudioOutputUrl) {
+        this.audioElement.src = this.currentAudioOutputUrl;
+        this.replayBtn.disabled = false;
+        this.stopAudioBtn.disabled = false;
+      }
 
       // Hardware LEDs: Processing complete
       this.handheld.setLed("blue", false);
@@ -502,14 +803,54 @@ export class TranslatorController {
   }
 
   playAudio() {
-    if (this.currentAudioOutputUrl) {
-      this.audioElement.play();
+    const tgtText = this.lcdTargetText ? this.lcdTargetText.textContent.trim() : "";
+    const tgtLang = this.tgtLangSelect ? this.tgtLangSelect.value : "en";
+    const speed = parseFloat(this.prosodySpeed?.value || 1.0);
+    const pitch = parseFloat(this.prosodyPitch?.value || 1.0);
+
+    // 1. Android Native Text-to-Speech Engine (Real Human Voice — Primary)
+    if (window.AndroidBridge && typeof window.AndroidBridge.speakText === "function" && tgtText && !tgtText.includes("Waiting") && !tgtText.includes("Translating") && !tgtText.includes("Step")) {
+      window.AndroidBridge.speakText(tgtText, tgtLang, speed, pitch);
       this.handheld.startWaveform(false);
-      this.replayBtn.disabled = true;
+      this.replayBtn.disabled = false;
+      this.stopAudioBtn.disabled = false;
+      const estMs = Math.max(1600, (tgtText.length * 85) / speed);
+      clearTimeout(this._ttsTimer);
+      this._ttsTimer = setTimeout(() => {
+        this.handheld.stopWaveform();
+      }, estMs);
+      return;
+    }
+
+    // 2. Browser SpeechSynthesis API fallback (Desktop Chrome / Edge)
+    if (typeof window !== "undefined" && "speechSynthesis" in window && tgtText && !tgtText.includes("Waiting") && !tgtText.includes("Translating") && !tgtText.includes("Step")) {
+      try {
+        window.speechSynthesis.cancel();
+        const utt = new SpeechSynthesisUtterance(tgtText);
+        utt.lang = tgtLang === "hi" ? "hi-IN" : (tgtLang === "ta" ? "ta-IN" : (tgtLang === "bn" ? "bn-IN" : (tgtLang === "te" ? "te-IN" : "en-US")));
+        utt.rate = speed;
+        utt.pitch = pitch;
+        utt.onstart = () => this.handheld.startWaveform(false);
+        utt.onend = () => this.handheld.stopWaveform();
+        utt.onerror = () => this.handheld.stopWaveform();
+        window.speechSynthesis.speak(utt);
+        this.replayBtn.disabled = false;
+        this.stopAudioBtn.disabled = false;
+        return;
+      } catch (e) {
+        console.warn("SpeechSynthesis error:", e);
+      }
     }
   }
 
   stopAudio() {
+    if (window.AndroidBridge && typeof window.AndroidBridge.stopSpeaking === "function") {
+      window.AndroidBridge.stopSpeaking();
+    }
+    if (typeof window !== "undefined" && "speechSynthesis" in window) {
+      window.speechSynthesis.cancel();
+    }
+    clearTimeout(this._ttsTimer);
     this.audioElement.pause();
     this.audioElement.currentTime = 0;
     this.handheld.stopWaveform();

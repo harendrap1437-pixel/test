@@ -323,6 +323,10 @@ class ModelManager:
             adapter = IndicTrans2ModelAdapter(meta, target_dir)
         elif category == "tts":
             adapter = PiperExpressiveTTSAdapter(meta, target_dir)
+        elif category == "emotion":
+            target_dir = str(EMOTION_MODELS_DIR / model_id)
+            meta.filepath = target_dir
+            adapter = Emotion2VecPlusAdapter(meta, target_dir)
         else:
             raise ValueError(f"Invalid category: {category}")
 

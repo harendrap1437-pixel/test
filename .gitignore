@@ -6,3 +6,12 @@ cloudflared.exe
 scratch/
 .system_generated/
 *.onnx.data
+*.apk
+dist/
+android/app/build/
+android/.gradle/
+.gradle/
+build/
+bin/
+android/app/src/main/assets/models/
+

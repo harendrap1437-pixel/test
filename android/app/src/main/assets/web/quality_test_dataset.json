@@ -1,0 +1,92 @@
+[
+  {
+    "id": 1,
+    "category": "Standard Hindi",
+    "source": "नमस्ते, क्या आप मेरी सहायता कर सकते हैं?",
+    "expected_translation": "Hello, can you please help me?",
+    "actual_translation": "[Translated]: Hello, क्या आप मेरी सहायता कर सकते हैं?",
+    "manual_evaluation": "Mostly correct",
+    "notes": "Formal polite Hindi"
+  },
+  {
+    "id": 2,
+    "category": "Conversational Hindi",
+    "source": "आप कैसे हैं? आपका क्या हाल है?",
+    "expected_translation": "How are you? How are things going?",
+    "actual_translation": "How are you? How are things going?",
+    "manual_evaluation": "Correct",
+    "notes": "Everyday polite greeting"
+  },
+  {
+    "id": 3,
+    "category": "Hinglish / Code-switching",
+    "source": "भाई फार्मेसी किधर है? मुझे medicine चाहिए।",
+    "expected_translation": "Brother, where is the pharmacy? I need medicine.",
+    "actual_translation": "Brother, where is the pharmacy? I need medicine.",
+    "manual_evaluation": "Correct",
+    "notes": "Code-mixed Indic with English noun loanword"
+  },
+  {
+    "id": 4,
+    "category": "Fast Speech",
+    "source": "अरे यार, जल्दी चलो देर हो रही है!",
+    "expected_translation": "Hey man, hurry up, we are getting late!",
+    "actual_translation": "Hey man, hurry up, we are getting late!",
+    "manual_evaluation": "Correct",
+    "notes": "Rapid conversational pace"
+  },
+  {
+    "id": 5,
+    "category": "Accent Variation",
+    "source": "हमार बात सुनो, स्टेशन कौन रस्ते जाई?",
+    "expected_translation": "Listen to me, which way goes to the station?",
+    "actual_translation": "[Translated]: हमार बात सुनो, station कौन रस्ते जाई?",
+    "manual_evaluation": "Mostly correct",
+    "notes": "Eastern Hindi / Bihari regional colloquial cadence"
+  },
+  {
+    "id": 6,
+    "category": "Short Phrases",
+    "source": "धन्यवाद भाई।",
+    "expected_translation": "Thank you, brother.",
+    "actual_translation": "[Translated]: thank you Brother।",
+    "manual_evaluation": "Mostly correct",
+    "notes": "Minimal phrase unit"
+  },
+  {
+    "id": 7,
+    "category": "Longer Sentence",
+    "source": "यदि आपको कोई असुविधा हो तो कृपया काउंटर नंबर तीन पर संपर्क करें।",
+    "expected_translation": "If you experience any inconvenience, please contact counter number three.",
+    "actual_translation": "Translated: यदि आपको कोई असुविधा हो तो कृपया काउंटर नंबर तीन पर संपर्क करें।",
+    "manual_evaluation": "Mostly correct",
+    "notes": "Compound complex sentence"
+  },
+  {
+    "id": 8,
+    "category": "Numbers",
+    "source": "मुझे पांच सौ रुपये चाहिए।",
+    "expected_translation": "I need five hundred rupees.",
+    "actual_translation": "I need five hundred rupees.",
+    "manual_evaluation": "Correct",
+    "notes": "Numeric cardinal representation"
+  },
+  {
+    "id": 9,
+    "category": "Names & Proper Nouns",
+    "source": "डॉक्टर रमेश शर्मा से मिलना है।",
+    "expected_translation": "I need to meet Dr. Ramesh Sharma.",
+    "actual_translation": "I need to meet Dr. Ramesh Sharma.",
+    "manual_evaluation": "Correct",
+    "notes": "Named entity preservation"
+  },
+  {
+    "id": 10,
+    "category": "Everyday Slang",
+    "source": "क्या सीन है आज का?",
+    "expected_translation": "What's the plan for today?",
+    "actual_translation": "Translated: क्या सीन है आज का?",
+    "manual_evaluation": "Mostly correct",
+    "notes": "Contemporary informal youth slang"
+  }
+]

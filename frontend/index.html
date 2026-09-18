@@ -136,7 +136,7 @@
                   <span>SOURCE TRANSCRIPT</span>
                   <span id="lcdAsrBadge" class="lcd-model-pill">ASR: IndicConformer INT8</span>
                 </div>
-                <div id="lcdSourceText" class="lcd-panel-content">Press Push-to-Talk or select a benchmark audio sample below.</div>
+                <div id="lcdSourceText" class="lcd-panel-content" contenteditable="true" title="Tap to edit or type custom spoken text directly">Press Push-to-Talk or select a benchmark audio sample below.</div>
               </div>
               <div class="lcd-panel target">
                 <div class="lcd-panel-title">
@@ -153,11 +153,34 @@
 
           <!-- Physical Handheld Controls -->
           <div class="handheld-controls-cluster">
-            <button id="pttMainBtn" class="ptt-main-btn">
-              <span>🎙 PUSH TO TALK (MIC)</span>
+            <button id="pttMainBtn" class="ptt-main-btn" style="width:100%;">
+              <span>🎙 PUSH TO TALK (LOCAL 16kHz MIC)</span>
             </button>
 
-            <div class="controls-secondary-row">
+            <!-- Quick Offline Test Presets Strip -->
+            <div class="quick-samples-strip" style="margin-top:6px; display:flex; flex-direction:column; gap:6px;">
+              <div style="display:flex; justify-content:space-between; align-items:center;">
+                <span style="font-size:0.72rem; color:var(--text-muted); font-weight:700; text-transform:uppercase; letter-spacing:0.5px;">⚡ TAP PRESET SAMPLE (1-CLICK TEST):</span>
+              </div>
+              <div style="display:grid; grid-template-columns: repeat(3, 1fr); gap:6px;">
+                <button class="quick-sample-pill" data-sample="sample_hi_phr1_pharmacy.wav" data-lang="hi" style="background:#131c2a; border:1px solid #23354d; color:#7dd3fc; padding:9px 4px; border-radius:8px; font-size:0.75rem; font-weight:700; cursor:pointer;" title="Tap to test Pharmacy query">💊 Pharmacy</button>
+                <button class="quick-sample-pill" data-sample="sample_hi_phr2_station.wav" data-lang="hi" style="background:#131c2a; border:1px solid #23354d; color:#7dd3fc; padding:9px 4px; border-radius:8px; font-size:0.75rem; font-weight:700; cursor:pointer;" title="Tap to test Station query">🚂 Station</button>
+                <button class="quick-sample-pill" data-sample="sample_hi_phr3_greeting.wav" data-lang="hi" style="background:#131c2a; border:1px solid #23354d; color:#7dd3fc; padding:9px 4px; border-radius:8px; font-size:0.75rem; font-weight:700; cursor:pointer;" title="Tap to test Greeting">👋 Greeting</button>
+              </div>
+              <div style="display:grid; grid-template-columns: repeat(3, 1fr); gap:6px;">
+                <button class="quick-sample-pill" data-sample="sample_hi_angry.wav" data-lang="hi" style="background:#221518; border:1px solid #4a2228; color:#ff8a80; padding:8px 4px; border-radius:8px; font-size:0.73rem; font-weight:700; cursor:pointer;">😡 Angry</button>
+                <button class="quick-sample-pill" data-sample="sample_hi_happy.wav" data-lang="hi" style="background:#13241b; border:1px solid #1e452e; color:#b9f6ca; padding:8px 4px; border-radius:8px; font-size:0.73rem; font-weight:700; cursor:pointer;">😊 Happy</button>
+                <button class="quick-sample-pill" data-sample="sample_hi_sad.wav" data-lang="hi" style="background:#141f2e; border:1px solid #1f3654; color:#82b1ff; padding:8px 4px; border-radius:8px; font-size:0.73rem; font-weight:700; cursor:pointer;">😢 Sad</button>
+              </div>
+            </div>
+
+            <!-- Voice pack download notification banner -->
+            <div id="ttsVoiceBar" style="display:none; background:rgba(255,171,0,0.12); border:1px solid rgba(255,171,0,0.4); border-radius:8px; padding:8px 12px; margin-top:4px; display:flex; justify-content:space-between; align-items:center;">
+              <span id="ttsVoiceBarText" style="color:#ffd54f; font-size:0.75rem; font-weight:600;">⚠️ Offline voice data not installed</span>
+              <button id="btnInstallTtsVoice" style="background:#ffab00; color:#000; border:none; padding:5px 10px; border-radius:6px; font-weight:700; font-size:0.72rem; cursor:pointer;">Install Voice</button>
+            </div>
+
+            <div class="controls-secondary-row" style="margin-top:6px;">
               <button id="translateActionBtn" class="secondary-control-btn">
                 <span>⚡ RUN TRANSLATE</span>
               </button>
@@ -201,11 +224,11 @@
 
             <!-- File Import Section -->
             <div id="fileInputSection" style="display:none;">
-              <div class="file-import-dropzone" onclick="document.getElementById('audioFileInput').click()">
+              <div id="fileDropZone" class="file-import-dropzone" onclick="document.getElementById('audioFileInput').click()">
                 <div style="font-size:1.5rem; margin-bottom:6px;">📥</div>
-                <div style="font-weight:600; font-size:0.9rem;">Drop WAV / PCM Audio File here or click to browse</div>
-                <div style="font-size:0.75rem; color:var(--text-muted); margin-top:4px;">Supports 16kHz mono WAV benchmark recordings</div>
-                <input type="file" id="audioFileInput" accept=".wav,.pcm" style="display:none;">
+                <div style="font-weight:600; font-size:0.9rem;">Drop Audio File here or click to browse</div>
+                <div style="font-size:0.75rem; color:var(--text-muted); margin-top:4px;">Supports WAV, MP3, M4A, OGG, FLAC & PCM recordings</div>
+                <input type="file" id="audioFileInput" accept="audio/*,.wav,.pcm,.mp3,.m4a,.ogg,.flac,.webm,.aac,.wma" style="display:none;">
               </div>
 
               <div style="margin-top:12px;">
@@ -682,7 +705,12 @@
           <option value="asr">Automatic Speech Recognition (ASR)</option>
           <option value="translation">Translation Model</option>
           <option value="tts">Text-To-Speech (TTS)</option>
+          <option value="emotion">Speech Emotion Recognition (SER)</option>
         </select>
+      </div>
+      <div class="form-group">
+        <label for="importModelFile">Local Model File / Package (Optional)</label>
+        <input type="file" id="importModelFile" accept=".onnx,.bin,.pt,.pth,.tflite,.json,.tar,.zip">
       </div>
       <div class="form-group">
         <label for="importName">Model Name</label>
@@ -786,7 +814,10 @@
         try {
           const st = await api.getStatus();
           const ramVal = document.getElementById("headerRamVal");
-          if (ramVal) ramVal.textContent = st.ram_mb;
+          if (ramVal) {
+            const ram = st.ram_mb ?? st.ram_used_mb ?? (st.system_metrics && st.system_metrics.ram_used_mb) ?? 210;
+            ramVal.textContent = ram;
+          }
         } catch (e) {}
       }
       updateHeaderStats();
