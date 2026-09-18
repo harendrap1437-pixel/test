@@ -17,5 +17,5 @@ for d in [MODELS_DIR, ASR_MODELS_DIR, TRANSLATION_MODELS_DIR, TTS_MODELS_DIR, EM
 
 # Strict Offline Enforcement Flag
 OFFLINE_MODE_STRICT = True
-SERVER_HOST = "127.0.0.1"
-SERVER_PORT = 8000
+SERVER_HOST = os.environ.get("HOST", "0.0.0.0")
+SERVER_PORT = int(os.environ.get("PORT", 8000))
